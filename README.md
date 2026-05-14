@@ -4,7 +4,7 @@
 ![Architecture](https://img.shields.io/badge/Architecture-x86%20%7C%20x64-lightgrey)
 ![Rubberduck](https://img.shields.io/badge/Rubberduck-Ready-orange)
 
-Generic VBA Class for bitwise operations using `LongPtr` (x86 and x64)
+VBA Class for bitwise operations using `LongPtr` (x86 and x64)
 
 A predeclared **Bitwise Operations Class** for VBA with:
 - Full set of bitwise operations on `LongPtr` (32-bit on x86, 64-bit on x64)
