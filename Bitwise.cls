@@ -16,7 +16,7 @@ Attribute VB_Description = "Bitwise Operations Class."
 '------------------------------------------------------------------------------
 ' MIT License
 '
-' Copyright (c) 2025 Vincent van Geerestein
+' Copyright (c) 2026 Vincent van Geerestein
 '
 ' Permission is hereby granted, free of charge, to any person obtaining a copy
 ' of this software and associated documentation files (the "Software"), to deal
@@ -48,7 +48,7 @@ Option Explicit
 ' Description: Bitwise Operations Class
 ' Enumeration: For Each Bit in object.BitArray(bits)
 ' Add-in: RubberDuck (https://rubberduckvba.com/)
-' Version: 2025.09.09
+' Version: 2026.11.07
 '
 ' The Bitwise Class is predeclared which creates a global default instance of
 ' the object with the same name making the object immediately accessible.
@@ -61,19 +61,19 @@ Option Explicit
 ' which returns a Long.
 '
 ' Methods
-' Count(bits)            Count the number of set bits in a bit pattern
-' Flip(bits, No)         Flips a selected bit in a bit pattern
-' Swap(bits, No1,No2)    Swaps two selected bits in a bit pattern
-' Inverse(bits)          Inverses a bit pattern
-' Reverse(bits)          Reverses a bit pattern
-' Clear(bits, No)        Clears a bit in a bit pattern
-' LClear(bits, No)       Clears the bit pattern left from a selected bit
-' RClear(bits, No)       Clears the bit pattern right from a selected bit
-' LShift(bits, amount)   Shifts a bit pattern to the left by an amount
-' RShift(bits, amount)   Shifts a bit pattern to the right by an amount
-' Shift(bits, amount)    Shifts a bit pattern by an amount
-' Rotate(bits, amount)   Rotates a bit pattern by an amount
-' Random()               Creates a random bit pattern
+' Count(bits)           Count the number of set bits in a bit pattern
+' Flip(bits, No)        Flips a selected bit in a bit pattern
+' Swap(bits, No1,No2)   Swaps two selected bits in a bit pattern
+' Invert(bits)          Inverts a bit pattern
+' Reverse(bits)         Reverses a bit pattern
+' Clear(bits, No)       Clears a bit in a bit pattern
+' LClear(bits, No)      Clears the bit pattern left from a selected bit
+' RClear(bits, No)      Clears the bit pattern right from a selected bit
+' LShift(bits, amount)  Shifts a bit pattern to the left by an amount
+' RShift(bits, amount)  Shifts a bit pattern to the right by an amount
+' Shift(bits, amount)   Shifts a bit pattern by an amount
+' Rotate(bits, amount)  Rotates a bit pattern by an amount
+' Random()              Creates a random bit pattern
 '
 ' Properties
 ' Bit(bits, No)          Returns or sets a selected bit in a bit pattern
@@ -88,23 +88,27 @@ Option Explicit
 ' latter case the signbit needs to be masked before the division and subsequently
 ' set depending on whether the bit that is shifted to the signbit is set or not.
 '
-' Precalculated bitmasks are used for efficiency and are initialized at object
-' instantiation. The Count, Reverse and BitString Function are relatively slow
-' because for these routines require bit by bit processing. However, the use of
-' precalculated byte lookup tables makes these functions 3-4 times faster.
+' Precalculated bitmasks are used for efficiency and are initialized on first
+' use. The Count, Reverse and BitString Function are relatively slow because
+' these routines require bit by bit processing. The use of precalculated byte
+' lookup tables makes these functions 3-4 times faster.
 '
-' Method       time (ms)
-' Count          0.00022 (with precalculated table)
-' Flip           0.00007
-' Inverse        0.00007
-' Reverse        0.00033 (with precalculated table)
-' Shift          0.00011
-' Rotate         0.00014
-' Random         0.00022
-' Swap           0.00010
-' BitString      0.00034 (with precalculated table)
+' Time per call in µs (RunBenchmarks in BenchmarkBitwise, 6,400,000 calls per
+' method, loop overhead subtracted):
 '
-' The standard module is typically 10-20% faster than the class implementation.
+' Method       Module     Class
+' Count        0.20       0.22      (byte lookup table)
+' Flip         0.04       0.07
+' Invert       0.02       0.06
+' Reverse      0.24       0.25      (byte lookup table)
+' Shift        0.08       0.10
+' Rotate       0.11       0.13
+' Random       0.19       0.21
+' Swap         0.07       0.09
+' BitString    0.30       0.34      (string lookup table)
+'
+' A class call costs about 0.02-0.03 µs more than a module call. For the fastest
+' methods (Flip, Invert, Swap, Shift) that is 35-150%, for the others 5-20%.
 
 ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 ' Compiler directives
@@ -113,7 +117,7 @@ Option Explicit
 ' The allocated memory can be minimized by switching off the StringTable lookup
 ' table which uses more memory than all the other tables and masks together.
 
-#Const UseStringTable = False
+#Const UseStringTable = True
 
 ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 ' Private declarations
@@ -144,7 +148,7 @@ Private ReverseTable(0 To &HFF) As Byte
 ' CountTable(n) is the number of bits set in byte n.
 ' Allocated memory for CountTable() is 32 + &H100 * 1 = 288 bytes (x64).
 Private CountTable(0 To &HFF) As Byte
-
+            
 #If UseStringTable Then
 ' StringTable(n) is the bitstring corresponding to byte n.
 ' Allocated memory for StringTable() is 32 + &H100 * 22 = 5664 bytes (x64).
@@ -162,7 +166,7 @@ End Enum
 ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 
 Private Sub Class_Initialize()
-
+    
     Randomize
     InitializeMasks
     InitializeTables
@@ -182,14 +186,14 @@ Public Function Count(ByVal bits As LongPtr) As Long
         Count = 1
         bits = bits And Not SignBitMask
     End If
-
+    
     ' Sum the precalculated byte counts.
     Dim i As Long
     For i = 0 To SignBit \ 8
         Count = Count + CountTable(CLng(bits And &HFF))
         bits = bits \ &H100
     Next
-
+    
 End Function
 
 
@@ -206,7 +210,7 @@ Public Function Swap(ByVal bits As LongPtr, ByVal No1 As Long, ByVal No2 As Long
 
     ' Save the mask for the two bits to be swapped.
     Dim Mask As LongPtr: Mask = BitMask(No1) Or BitMask(No2)
-
+    
     ' Swap the two bits if they are different.
     Select Case bits And Mask
     Case 0, Mask
@@ -218,11 +222,11 @@ Public Function Swap(ByVal bits As LongPtr, ByVal No1 As Long, ByVal No2 As Long
 End Function
 
 
-'@Description("Inverses a bit pattern and returns the outcome.")
-Public Function Inverse(ByVal bits As LongPtr) As LongPtr
+'@Description("Inverts a bit pattern and returns the outcome.")
+Public Function Invert(ByVal bits As LongPtr) As LongPtr
 
-    Inverse = Not bits
-
+    Invert = Not bits
+    
 End Function
 
 
@@ -233,17 +237,17 @@ Public Function Reverse(ByVal bits As LongPtr) As LongPtr
     ' accumulation loop: without it ReverseTable(byte0) can reach 0xFF, pushing
     ' the 7-byte intermediate past 0x7FFFFFFFFFFFFF and overflowing on * &H100.
     Dim Mask As LongPtr: Mask = bits And (1 Or SignBitMask)
-
+    
     ' Mask the 0th bit and the SignBit.
     bits = bits And Not (1 Or SignBitMask)
-
+    
     ' Combine the precalculated reversed bytes.
     Dim i As Long
     For i = 0 To SignBit \ 8
         Reverse = &H100 * Reverse Or ReverseTable(CLng(bits And &HFF))
         bits = bits \ &H100
     Next
-
+    
     ' Restore the two masked bits and swap them if they are different.
     Select Case Mask
     Case 1, SignBitMask
@@ -251,13 +255,13 @@ Public Function Reverse(ByVal bits As LongPtr) As LongPtr
     Case Else
         Reverse = Reverse Or Mask
     End Select
-
+    
 End Function
 
 
 '@Description("Clears a selected bit in a bit pattern and returns the outcome.")
 Public Function Clear(ByVal bits As LongPtr, ByVal No As Long) As LongPtr
-
+    
     Clear = bits And Not BitMask(No)
 
 End Function
@@ -267,7 +271,7 @@ End Function
 Public Function LClear(ByVal bits As LongPtr, ByVal No As Long) As LongPtr
 
     LClear = bits And (BitMask(No) Or MaxMask(No))
-
+    
 End Function
 
 
@@ -275,15 +279,15 @@ End Function
 Public Function RClear(ByVal bits As LongPtr, ByVal No As Long) As LongPtr
 
     RClear = bits And Not MaxMask(No)
-
+    
 End Function
 
 
 '@Description("Shifts a bit pattern to the left by an amount and returns the outcome.")
 Public Function LShift(ByVal bits As LongPtr, ByVal amount As Byte) As LongPtr
-
+    
     If amount > SignBit Then Exit Function
-
+    
     If amount = 0 Then
         LShift = bits
     ElseIf (bits And BitMask(SignBit - amount)) = 0 Then
@@ -293,7 +297,7 @@ Public Function LShift(ByVal bits As LongPtr, ByVal amount As Byte) As LongPtr
         ' Clear the overflow bits before multiplying and set the signbit.
         LShift = (bits And MaxMask(SignBit - amount)) * BitMask(amount) Or SignBitMask
     End If
-
+ 
 End Function
 
 
@@ -302,7 +306,7 @@ Public Function RShift(ByVal bits As LongPtr, ByVal amount As Byte) As LongPtr
 ' RShiftBits is effectively a right logical shift, it fills the vacated bits with 0.
 
     If amount > SignBit Then Exit Function
-
+    
     If amount = 0 Then
         RShift = bits
     ElseIf bits < 0 Then
@@ -311,7 +315,7 @@ Public Function RShift(ByVal bits As LongPtr, ByVal amount As Byte) As LongPtr
     Else
         RShift = bits \ BitMask(amount)
     End If
-
+ 
 End Function
 
 
@@ -319,7 +323,7 @@ End Function
 Public Function Shift(ByVal bits As LongPtr, ByVal amount As Long) As LongPtr
 ' Performs a left (amount < 0) or a right (amount > 0) logical shift.
 ' The LShift/RShift codes are repeated to avoid extra stack frames.
-
+    
     If amount < 0 And amount >= -SignBit Then
         If (bits And BitMask(SignBit + amount)) = 0 Then
             Shift = (bits And MaxMask(SignBit + amount)) * BitMask(-amount)
@@ -335,7 +339,7 @@ Public Function Shift(ByVal bits As LongPtr, ByVal amount As Long) As LongPtr
     ElseIf amount = 0 Then
         Shift = bits
     End If
-
+ 
 End Function
 
 
@@ -353,7 +357,7 @@ Public Function Rotate(ByVal bits As LongPtr, ByVal amount As Long) As LongPtr
         Rotate = bits
         Exit Function
     End If
-
+    
     ' Calculate the right shift.
     Dim RPart As LongPtr
     If bits < 0 Then
@@ -361,7 +365,7 @@ Public Function Rotate(ByVal bits As LongPtr, ByVal amount As Long) As LongPtr
     Else
         RPart = bits \ BitMask(amount)
     End If
-
+    
     ' Calculate the left shift.
     Dim LPart As LongPtr
     If (bits And BitMask(amount - 1)) = 0 Then
@@ -369,17 +373,17 @@ Public Function Rotate(ByVal bits As LongPtr, ByVal amount As Long) As LongPtr
     Else
         LPart = (bits And MaxMask(amount - 1)) * BitMask(SignBit + 1 - amount) Or SignBitMask
     End If
-
+    
     ' Combine the left and right shifts to obtain the rotation.
     Rotate = LPart Or RPart
-
+         
 End Function
 
 
 '@Description("Returns a random bit pattern.")
 Public Function Random() As LongPtr
 ' The VBA.Rnd function is used to construct a pseudo-random LongPtr.
-
+    
     ' Generate the first random integer.
     Const Max16 As Long = &H10000
     Random = Int(Max16 * Rnd)
@@ -388,7 +392,7 @@ Public Function Random() As LongPtr
     ' Generate two more random integers and combine.
     Random = Max16 * (Max16 * Random Or Int(Max16 * Rnd)) Or Int(Max16 * Rnd)
 #End If
-
+    
     ' Generate the last random integer and combine to get the result.
     If (Random And BitMask16) = 0 Then
         Random = Max16 * Random Or Int(Max16 * Rnd)
@@ -409,7 +413,7 @@ Public Property Get Bit(ByRef bits As LongPtr, ByVal No As Long) As Boolean
 
 End Property
 Public Property Let Bit(ByRef bits As LongPtr, ByVal No As Long, ByVal RHS As Boolean)
-
+    
     If RHS Then
         bits = bits Or BitMask(No)
     Else
@@ -419,7 +423,7 @@ Public Property Let Bit(ByRef bits As LongPtr, ByVal No As Long, ByVal RHS As Bo
 End Property
 
 
-'@Description "Converts a bit pattern to or from an array of bits."
+'@Description("Converts a bit pattern to or from an array of bits.")
 '@Ignore ParameterCanBeByVal
 Public Property Get BitArray(ByRef bits As LongPtr) As Boolean()
 
@@ -428,32 +432,43 @@ Public Property Get BitArray(ByRef bits As LongPtr) As Boolean()
     For i = 0 To SignBit
         BitArr(i) = bits And BitMask(i)
     Next
-
+    
     BitArray = BitArr
 
 End Property
 Public Property Let BitArray(ByRef bits As LongPtr, ByRef RHS() As Boolean)
-' A RHS array shorter than SignBit + 1 it is in effect padded with 0's.
+' An RHS array shorter than SignBit + 1 is in effect padded with 0's.
+'
+' VBA crashes the host when an array that the caller received ByRef is passed
+' on as the RHS of an array Property Let. Copy it to a local array first:
+'     Dim Values() As Boolean: Values = bitValues
+'     BitArray(bits) = Values
 
-    ' (Not Not RHS) = 0 is a standard trick.
-    If (Not Not RHS) = 0 Then Err.Raise vbErrorInvalidProcedureCall, , "Array is empty"
-    If UBound(RHS) < LBound(RHS) Then Err.Raise vbErrorInvalidProcedureCall, , "Array has no elements"
-    If UBound(RHS) - LBound(RHS) > SignBit Then Err.Raise vbErrorInvalidProcedureCall, , "Array is too long"
-
+    On Error GoTo Fail
+    Dim Lo As Long: Lo = LBound(RHS)
+    Dim Up As Long: Up = UBound(RHS)
+    On Error GoTo 0
+    
+    If Up < Lo Then Err.Raise vbErrorInvalidProcedureCall, , "Array has no elements"
+    If Up - Lo > SignBit Then Err.Raise vbErrorInvalidProcedureCall, , "Array is too long"
+    
     bits = 0
-    Dim Lbnd As Long: Lbnd = LBound(RHS)
     Dim i As Long
-    For i = Lbnd To UBound(RHS)
+    For i = Lo To Up
         If RHS(i) Then
-            bits = bits Or BitMask(i - Lbnd)
+            bits = bits Or BitMask(i - Lo)
         End If
     Next
-
+    Exit Property
+    
+Fail:
+   Err.Raise vbErrorInvalidProcedureCall, , "Array is empty"
+ 
 End Property
 
 
 #If UseStringTable Then
-'@Description "Converts a bit pattern to or from a bitstring."
+'@Description("Converts a bit pattern to or from a bitstring.")
 '@Ignore ParameterCanBeByVal
 Public Property Get BitString(ByRef bits As LongPtr) As String
 
@@ -466,22 +481,22 @@ Public Property Get BitString(ByRef bits As LongPtr) As String
 
     ' Mask the SignBit and copy to a local variable.
     Dim Mask As LongPtr: Mask = bits And Not SignBitMask
-
+    
     ' Combine the precalculated bitstrings for the individual bytes.
     Dim i As Long
     For i = SignBit + 1 - 7 To 1 Step -8
         Mid$(BitString, i) = StringTable(CLng(Mask And &HFF))
         Mask = Mask \ &H100
     Next
-
+    
     ' Set the SignBit in the bitstring if it is set.
     If bits < 0 Then
         Mid$(BitString, 1) = "1"
     End If
-
+    
 End Property
 #Else
-'@Description "Converts a bit pattern to or from a bitstring."
+'@Description("Converts a bit pattern to or from a bitstring.")
 '@Ignore ParameterCanBeByVal
 Public Property Get BitString(ByRef bits As LongPtr) As String
 
@@ -499,7 +514,7 @@ Public Property Get BitString(ByRef bits As LongPtr) As String
             Mid$(BitString, SignBit + 1 - i) = "1"
         End If
     Next
-
+    
 End Property
 #End If
 Public Property Let BitString(ByRef bits As LongPtr, ByVal RHS As String)
@@ -537,21 +552,21 @@ Private Sub InitializeMasks()
         BitMask(i) = bits + 1
         bits = 2 * bits + 1
     Next
-
+    
     ' Now bits = 2^SignBit - 1 for sure (all lower bits set)
     MaxMask(SignBit) = bits
     BitMask(SignBit) = Not bits
-
+    
     ' Set masks.
     SignBitMask = BitMask(SignBit)
     BitMask16 = BitMask(SignBit - 16)
-
+            
 End Sub
 
 
 '@Description("Initializes the byte tables.")
 Private Sub InitializeTables()
-
+    
     ReverseTable(0) = 0
     CountTable(0) = 0
     Dim bits As Byte, Reverse As Byte, Count As Byte
@@ -578,7 +593,7 @@ Private Sub InitializeTables()
     Next
     ReverseTable(255) = 255
     CountTable(255) = 8
-
+    
 #If UseStringTable Then
     Const ZeroStr As String * 8 = "00000000"
     StringTable(0) = ZeroStr
