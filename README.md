@@ -184,7 +184,8 @@ Total about 1.7 KB without the string table, 7.3 KB with it.
 ## 📝 Implementation notes
 
 - The module initializes its masks and tables on first use; the class does it in `Class_Initialize`.
-- `RandomBits` / `Random` build a pattern from 16-bit pieces of `VBA.Rnd`.
+- `RandomBits` / `Random` build a pattern from 16-bit pieces of `VBA.Rnd`. `Randomize` is called once: by the
+  module on the first call of any of its functions, by the class in `Class_Initialize`.
 - **VBA crash:** VBA crashes the host application when an array that a procedure received `ByRef` is passed on
   as the value of an array `Property Let`. This is a VBA bug, not specific to `BitArray`. Copy the array to a
   local array first:

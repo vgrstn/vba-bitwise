@@ -376,7 +376,7 @@ End Function
 Public Function RandomBits() As LongPtr
 ' The VBA.Rnd function is used to construct a pseudo-random LongPtr.
     
-    If BitMask(0) = 0 Then InitializeMasks: Randomize
+    If BitMask(0) = 0 Then InitializeMasks
     
     ' Generate the first random integer.
     Const Max16 As Long = &H10000
@@ -528,6 +528,9 @@ End Property
 '@Description("Initializes the bit masks.")
 Private Sub InitializeMasks()
 
+    ' Seed VBA.Rnd once, whichever function is called first.
+    Randomize
+    
     ' After the loop, "bits" will equal 2^(SignBit) - 1
     Dim bits As LongPtr
     Dim i As Long
